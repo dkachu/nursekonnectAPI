@@ -7,8 +7,6 @@ from django.contrib.auth import get_user_model
 from django.test import SimpleTestCase
 from django.urls import reverse
 
-from core.settings import production
-
 
 class FoundationConfigurationTests(SimpleTestCase):
     """Validate foundation settings without touching the database."""
@@ -30,5 +28,5 @@ class FoundationConfigurationTests(SimpleTestCase):
 
     def test_postgis_database_backend_is_configured(self) -> None:
         """The production database is configured for PostGIS."""
-        engine = production.DATABASES["default"]["ENGINE"]
+        engine = settings.DATABASES["default"]["ENGINE"]
         self.assertEqual(engine, "django.contrib.gis.db.backends.postgis")

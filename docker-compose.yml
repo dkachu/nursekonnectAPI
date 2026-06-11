@@ -7,7 +7,8 @@ services:
     env_file:
       - .env
     environment:
-      DJANGO_SETTINGS_MODULE: core.settings.production
+      DJANGO_SETTINGS_MODULE: core.settings
+      DJANGO_ENV: production
       DJANGO_SECURE_SSL_REDIRECT: "false"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -34,7 +35,8 @@ services:
     env_file:
       - .env
     environment:
-      DJANGO_SETTINGS_MODULE: core.settings.production
+      DJANGO_SETTINGS_MODULE: core.settings
+      DJANGO_ENV: production
       DJANGO_SECURE_SSL_REDIRECT: "false"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -60,7 +62,8 @@ services:
     env_file:
       - .env
     environment:
-      DJANGO_SETTINGS_MODULE: core.settings.production
+      DJANGO_SETTINGS_MODULE: core.settings
+      DJANGO_ENV: production
       DJANGO_SECURE_SSL_REDIRECT: "false"
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432

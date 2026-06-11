@@ -23,7 +23,7 @@ ignore = ["DJ008"]
 "backend/**/migrations/*.py" = ["E501"]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "core.settings.test"
+DJANGO_SETTINGS_MODULE = "core.settings"
 django_find_project = false
 pythonpath = ["backend"]
 testpaths = ["backend/tests"]

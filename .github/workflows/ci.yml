@@ -41,7 +41,8 @@ jobs:
         shell: bash
 
     env:
-      DJANGO_SETTINGS_MODULE: core.settings.test
+      DJANGO_SETTINGS_MODULE: core.settings
+      DJANGO_ENV: test
       DJANGO_SECRET_KEY: ci-secret-key-with-at-least-thirty-two-bytes
       MEDICAL_DATA_FERNET_KEY: ""
       POSTGRES_TEST_DB: nursekonnect

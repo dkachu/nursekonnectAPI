@@ -11,7 +11,7 @@
 
 ## Production Settings
 
-Use `core.settings.production` and configure all secrets through environment variables.
+Use `core.settings` with `DJANGO_ENV=production` and configure all secrets through environment variables.
 
 Required production controls:
 

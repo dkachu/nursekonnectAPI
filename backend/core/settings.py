@@ -1,14 +1,15 @@
-"""Base settings shared by all NurseKonnect environments."""
+"""Django settings for the NurseKonnect project."""
 
 from __future__ import annotations
 
 import os
+import sys
 from datetime import timedelta
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BASE_DIR.parent
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -44,13 +45,16 @@ def env_list(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+RUNNING_TESTS = any("pytest" in argument or argument == "test" for argument in sys.argv)
+DJANGO_ENV = env("DJANGO_ENV", "test" if RUNNING_TESTS else "local")
+
 SECRET_KEY = env("DJANGO_SECRET_KEY", "unsafe-local-development-key")
 MEDICAL_DATA_FERNET_KEY = env("MEDICAL_DATA_FERNET_KEY")
-DEBUG = env_bool("DJANGO_DEBUG", False)
-ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+DEBUG = env_bool("DJANGO_DEBUG", DJANGO_ENV == "local")
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,0.0.0.0")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
-DJANGO_APPS = [
+INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -58,16 +62,10 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-]
-
-THIRD_PARTY_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
-]
-
-LOCAL_APPS = [
     "apps.common",
     "apps.accounts",
     "apps.patients",
@@ -79,8 +77,6 @@ LOCAL_APPS = [
     "apps.notifications",
     "apps.audit_logs",
 ]
-
-INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -113,17 +109,29 @@ TEMPLATES = [
 WSGI_APPLICATION = "core.wsgi.application"
 ASGI_APPLICATION = "core.asgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.contrib.gis.db.backends.postgis",
-        "NAME": env("POSTGRES_DB", "nursekonnect"),
-        "USER": env("POSTGRES_USER", "nursekonnect"),
-        "PASSWORD": env("POSTGRES_PASSWORD", "nursekonnect"),
-        "HOST": env("POSTGRES_HOST", "localhost"),
-        "PORT": env("POSTGRES_PORT", "5432"),
-        "CONN_MAX_AGE": env_int("POSTGRES_CONN_MAX_AGE", 60),
+if DJANGO_ENV == "test":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.contrib.gis.db.backends.postgis",
+            "NAME": env("POSTGRES_TEST_DB", env("POSTGRES_DB", "nursekonnect")),
+            "USER": env("POSTGRES_TEST_USER", env("POSTGRES_USER", "nursekonnect")),
+            "PASSWORD": env("POSTGRES_TEST_PASSWORD", env("POSTGRES_PASSWORD", "nursekonnect")),
+            "HOST": env("POSTGRES_TEST_HOST", "localhost"),
+            "PORT": env("POSTGRES_TEST_PORT", "5433"),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.contrib.gis.db.backends.postgis",
+            "NAME": env("POSTGRES_DB", "nursekonnect"),
+            "USER": env("POSTGRES_USER", "nursekonnect"),
+            "PASSWORD": env("POSTGRES_PASSWORD", "nursekonnect"),
+            "HOST": env("POSTGRES_HOST", "localhost"),
+            "PORT": env("POSTGRES_PORT", "5432"),
+            "CONN_MAX_AGE": env_int("POSTGRES_CONN_MAX_AGE", 60),
+        }
+    }
 
 AUTH_USER_MODEL = "accounts.User"
 
@@ -208,3 +216,36 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
+
+if DJANGO_ENV == "local":
+    CORS_ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+if DJANGO_ENV == "test":
+    SECRET_KEY = "test-secret-key-with-at-least-thirty-two-bytes"
+    DEBUG = False
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+    EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+    CELERY_TASK_ALWAYS_EAGER = True
+    CELERY_TASK_EAGER_PROPAGATES = True
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "nursekonnect-tests",
+        }
+    }
+
+if DJANGO_ENV == "production":
+    DEBUG = False
+    SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

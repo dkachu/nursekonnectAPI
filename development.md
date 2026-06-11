@@ -11,7 +11,8 @@
 
 Create `.env` from `.env.example` for Docker-based development.
 
-For local Django commands, run from `backend/` and use `core.settings.local`.
+For local Django commands, run from `backend/` and use `core.settings`.
+The default environment mode is `DJANGO_ENV=local`.
 
 ```powershell
 cd backend

@@ -14,6 +14,7 @@ cd backend
 
 ## Settings
 
-- Local: `core.settings.local`
-- Test: `core.settings.test`
-- Production: `core.settings.production`
+- Django settings module: `core.settings`
+- Local mode: `DJANGO_ENV=local`
+- Test mode: `DJANGO_ENV=test`
+- Production mode: `DJANGO_ENV=production`

@@ -9,7 +9,7 @@ import sys
 
 def main() -> None:
     """Run Django management commands."""
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings.local")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "core.settings")
 
     from django.core.management import execute_from_command_line
 
