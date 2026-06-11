@@ -1,6 +1,14 @@
 [tool.black]
 line-length = 100
 target-version = ["py312"]
+extend-exclude = '''
+(
+  ^/backend/\.cache/
+  | ^/backend/\.local/
+  | ^/backend/media/
+  | ^/backend/staticfiles/
+)
+'''
 
 [tool.ruff]
 line-length = 100
@@ -28,6 +36,7 @@ source = [
     "backend/apps/common",
     "backend/apps/patients",
     "backend/apps/nurses",
+    "backend/apps/tracking",
 ]
 omit = ["*/migrations/*", "*/admin.py", "*/apps.py"]
 

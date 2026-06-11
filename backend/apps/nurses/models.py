@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.contrib.gis.db import models as gis_models
 from django.db import models
 from django.utils import timezone
 
@@ -122,6 +123,13 @@ class NurseProfile(TimeStampedModel):
     bio = models.TextField(blank=True)
     county = models.CharField(max_length=100, blank=True)
     address = models.TextField(blank=True)
+    current_location = gis_models.PointField(
+        geography=True,
+        srid=4326,
+        spatial_index=True,
+        blank=True,
+        null=True,
+    )
     last_location_update = models.DateTimeField(blank=True, null=True)
     location_visible = models.BooleanField(default=False)
     status = models.CharField(
@@ -144,6 +152,7 @@ class NurseProfile(TimeStampedModel):
         indexes = [
             models.Index(fields=["nck_verification_status", "status", "is_available"]),
             models.Index(fields=["travel_radius_km"]),
+            models.Index(fields=["last_location_update"]),
         ]
         ordering = ["user__email"]
 

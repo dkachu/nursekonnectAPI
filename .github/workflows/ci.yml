@@ -21,6 +21,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: nursekonnect
+          POSTGRES_USER: nursekonnect
+          POSTGRES_PASSWORD: nursekonnect
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nursekonnect -d nursekonnect"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         shell: bash
@@ -29,6 +44,11 @@ jobs:
       DJANGO_SETTINGS_MODULE: core.settings.test
       DJANGO_SECRET_KEY: ci-secret-key-with-at-least-thirty-two-bytes
       MEDICAL_DATA_FERNET_KEY: ""
+      POSTGRES_TEST_DB: nursekonnect
+      POSTGRES_TEST_USER: nursekonnect
+      POSTGRES_TEST_PASSWORD: nursekonnect
+      POSTGRES_TEST_HOST: localhost
+      POSTGRES_TEST_PORT: "5432"
 
     steps:
       - name: Check out repository

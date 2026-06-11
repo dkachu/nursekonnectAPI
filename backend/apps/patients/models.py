@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.contrib.gis.db import models as gis_models
 from django.db import models
 
 from apps.common.fields import EncryptedTextField
@@ -57,8 +58,19 @@ class PatientProfile(TimeStampedModel):
     medical_notes = EncryptedTextField(blank=True, default="")
     county = models.CharField(max_length=100, blank=True)
     address = models.TextField(blank=True)
+    current_location = gis_models.PointField(
+        geography=True,
+        srid=4326,
+        spatial_index=True,
+        blank=True,
+        null=True,
+    )
+    last_location_update = models.DateTimeField(blank=True, null=True)
 
     class Meta:
+        indexes = [
+            models.Index(fields=["last_location_update"]),
+        ]
         ordering = ["user__email"]
 
     def __str__(self) -> str:

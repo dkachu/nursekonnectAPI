@@ -6,7 +6,6 @@ from .base import *  # noqa: F403
 from .base import env_bool
 
 DEBUG = False
-INSTALLED_APPS = ["django.contrib.gis", *INSTALLED_APPS]  # noqa: F405
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True

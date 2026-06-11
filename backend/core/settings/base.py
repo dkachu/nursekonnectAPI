@@ -54,6 +54,7 @@ DJANGO_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
+    "django.contrib.gis",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
@@ -147,6 +148,7 @@ NCK_LICENSE_STATUS_URL = env(
     "NCK_LICENSE_STATUS_URL",
     "https://osp.nckenya.com/LicenseStatus",
 )
+MAX_LOCATION_AGE_MINUTES = env_int("MAX_LOCATION_AGE_MINUTES", 15)
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

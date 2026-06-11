@@ -8,7 +8,7 @@ DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "0.0.0.0"]
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.postgresql",
+        "ENGINE": "django.contrib.gis.db.backends.postgis",
         "NAME": env("POSTGRES_DB", "nursekonnect"),  # noqa: F405
         "USER": env("POSTGRES_USER", "nursekonnect"),  # noqa: F405
         "PASSWORD": env("POSTGRES_PASSWORD", "nursekonnect"),  # noqa: F405
