@@ -19,6 +19,8 @@ phone_validator = RegexValidator(
 class UserSerializer(serializers.ModelSerializer[User]):
     """Public authenticated user payload."""
 
+    profile = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = (
@@ -29,8 +31,31 @@ class UserSerializer(serializers.ModelSerializer[User]):
             "role",
             "email_verified",
             "phone_verified",
+            "profile",
         )
         read_only_fields = fields
+
+    def get_profile(self, obj: User) -> dict[str, Any] | None:
+        """Return role-specific non-medical profile metadata."""
+        if obj.role == UserRole.PATIENT and hasattr(obj, "patient_profile"):
+            profile = obj.patient_profile
+            return {
+                "id": profile.id,
+                "phone_number": profile.phone_number,
+                "county": profile.county,
+                "address": profile.address,
+            }
+        if obj.role == UserRole.NURSE and hasattr(obj, "nurse_profile"):
+            profile = obj.nurse_profile
+            return {
+                "id": profile.id,
+                "phone_number": profile.phone_number,
+                "nck_verification_status": profile.nck_verification_status,
+                "status": profile.status,
+                "is_available": profile.is_available,
+                "location_visible": profile.location_visible,
+            }
+        return None
 
 
 class RegisterSerializer(serializers.Serializer[dict[str, Any]]):

@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
@@ -17,6 +18,7 @@ from apps.accounts.services.registration import RegistrationInput, RegistrationS
 from apps.accounts.services.tokens import TokenService
 from apps.accounts.services.verification import OTPService
 from apps.accounts.views import (
+    CurrentUserView,
     LoginView,
     RefreshView,
     RegisterView,
@@ -142,7 +144,7 @@ def test_registration_rejects_invalid_phone(
 
 @pytest.mark.django_db
 def test_login_returns_token_pair(api_client: APIClient, patient_payload: dict[str, str]) -> None:
-    """A valid email/password login returns access, refresh, and user metadata."""
+    """A valid login returns access/user metadata and sets an HttpOnly refresh cookie."""
     api_client.post(reverse("auth-register"), patient_payload, format="json")
 
     response = api_client.post(
@@ -153,8 +155,13 @@ def test_login_returns_token_pair(api_client: APIClient, patient_payload: dict[s
 
     assert response.status_code == 200
     assert response.data["access"]
-    assert response.data["refresh"]
+    assert "refresh" not in response.data
     assert response.data["user"]["email"] == patient_payload["email"]
+    refresh_cookie = response.cookies[settings.AUTH_REFRESH_COOKIE_NAME]
+    assert refresh_cookie.value
+    assert refresh_cookie["httponly"] is True
+    assert refresh_cookie["samesite"] == settings.AUTH_REFRESH_COOKIE_SAMESITE
+    assert refresh_cookie["path"] == settings.AUTH_REFRESH_COOKIE_PATH
     assert AuditLog.objects.filter(action="AUTH_LOGIN_SUCCEEDED").exists()
 
 
@@ -173,7 +180,7 @@ def test_login_rejects_invalid_credentials(api_client: APIClient) -> None:
 
 @pytest.mark.django_db
 def test_refresh_rotates_token(api_client: APIClient, patient_payload: dict[str, str]) -> None:
-    """Refresh endpoint returns a new access and refresh token."""
+    """Refresh endpoint rotates the HttpOnly cookie and returns only access."""
     api_client.post(reverse("auth-register"), patient_payload, format="json")
     login_response = api_client.post(
         reverse("auth-login"),
@@ -181,16 +188,40 @@ def test_refresh_rotates_token(api_client: APIClient, patient_payload: dict[str,
         format="json",
     )
 
-    response = api_client.post(
-        reverse("auth-refresh"),
-        {"refresh": login_response.data["refresh"]},
-        format="json",
-    )
+    old_refresh = login_response.cookies[settings.AUTH_REFRESH_COOKIE_NAME].value
+    api_client.cookies[settings.AUTH_REFRESH_COOKIE_NAME] = old_refresh
+
+    response = api_client.post(reverse("auth-refresh"), {}, format="json")
 
     assert response.status_code == 200
     assert response.data["access"]
-    assert response.data["refresh"]
-    assert response.data["refresh"] != login_response.data["refresh"]
+    assert "refresh" not in response.data
+    new_refresh = response.cookies[settings.AUTH_REFRESH_COOKIE_NAME].value
+    assert new_refresh
+    assert new_refresh != old_refresh
+    assert BlacklistedToken.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_refresh_supports_body_fallback_for_api_clients(
+    api_client: APIClient,
+    patient_payload: dict[str, str],
+) -> None:
+    """Refresh still supports body fallback for non-browser API clients."""
+    api_client.post(reverse("auth-register"), patient_payload, format="json")
+    login_response = api_client.post(
+        reverse("auth-login"),
+        {"email": patient_payload["email"], "password": patient_payload["password"]},
+        format="json",
+    )
+    refresh = login_response.cookies[settings.AUTH_REFRESH_COOKIE_NAME].value
+    api_client.cookies.clear()
+
+    response = api_client.post(reverse("auth-refresh"), {"refresh": refresh}, format="json")
+
+    assert response.status_code == 200
+    assert response.data["access"]
+    assert "refresh" not in response.data
 
 
 @pytest.mark.django_db
@@ -213,16 +244,17 @@ def test_logout_blacklists_refresh_token(
         {"email": patient_payload["email"], "password": patient_payload["password"]},
         format="json",
     )
+    refresh = login_response.cookies[settings.AUTH_REFRESH_COOKIE_NAME].value
+    api_client.cookies[settings.AUTH_REFRESH_COOKIE_NAME] = refresh
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}")
 
-    response = api_client.post(
-        reverse("auth-logout"),
-        {"refresh": login_response.data["refresh"]},
-        format="json",
-    )
+    response = api_client.post(reverse("auth-logout"), {}, format="json")
 
     assert response.status_code == 204
     assert BlacklistedToken.objects.count() == 1
+    cleared_cookie = response.cookies[settings.AUTH_REFRESH_COOKIE_NAME]
+    assert cleared_cookie.value == ""
+    assert cleared_cookie["path"] == settings.AUTH_REFRESH_COOKIE_PATH
     assert AuditLog.objects.filter(action="AUTH_LOGGED_OUT").exists()
 
 
@@ -358,6 +390,29 @@ def test_logout_rejects_invalid_refresh_for_authenticated_user(
     response = api_client.post(reverse("auth-logout"), {"refresh": "bad-token"}, format="json")
 
     assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_current_user_endpoint_restores_user_context(
+    api_client: APIClient,
+    patient_payload: dict[str, str],
+) -> None:
+    """The current-user endpoint returns user and non-medical profile data."""
+    api_client.post(reverse("auth-register"), patient_payload, format="json")
+    login_response = api_client.post(
+        reverse("auth-login"),
+        {"email": patient_payload["email"], "password": patient_payload["password"]},
+        format="json",
+    )
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {login_response.data['access']}")
+
+    response = api_client.get(reverse("auth-me"))
+
+    assert response.status_code == 200
+    assert response.data["user"]["email"] == patient_payload["email"]
+    assert response.data["user"]["role"] == UserRole.PATIENT
+    assert response.data["user"]["profile"]["phone_number"] == patient_payload["phone_number"]
+    assert "allergies" not in response.data["user"]["profile"]
 
 
 @pytest.mark.django_db
@@ -583,6 +638,7 @@ def test_auth_views_use_scoped_throttles() -> None:
     assert RefreshView.throttle_scope == "auth_refresh"
     assert VerifyOTPView.throttle_scope == "otp_verify"
     assert ResendOTPView.throttle_scope == "otp_resend"
+    assert CurrentUserView.permission_classes
 
 
 def test_owner_permission() -> None:

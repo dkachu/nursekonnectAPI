@@ -223,6 +223,47 @@ def test_admin_can_review_credential(
 
 
 @pytest.mark.django_db
+def test_admin_can_list_nurses_and_selected_credentials(
+    api_client: APIClient,
+    nurse_user: object,
+    admin_user: object,
+) -> None:
+    """Authorized admins can load nurse verification dashboard data."""
+    credential = NurseCredential.objects.create(
+        nurse=nurse_user.nurse_profile,
+        credential_type=CredentialType.NCK_LICENSE,
+        image=uploaded_image("license.png"),
+    )
+    authenticate(api_client, admin_user)
+
+    nurses_response = api_client.get(reverse("admin-nurse-list"))
+    credentials_response = api_client.get(
+        reverse(
+            "admin-nurse-credential-list",
+            kwargs={"nurse_id": nurse_user.nurse_profile.id},
+        )
+    )
+
+    assert nurses_response.status_code == 200
+    assert nurses_response.data[0]["id"] == nurse_user.nurse_profile.id
+    assert credentials_response.status_code == 200
+    assert credentials_response.data[0]["id"] == credential.id
+
+
+@pytest.mark.django_db
+def test_patient_cannot_load_admin_nurse_dashboard(
+    api_client: APIClient,
+    patient_user: object,
+) -> None:
+    """Non-admin actors cannot enumerate verification dashboard data."""
+    authenticate(api_client, patient_user)
+
+    response = api_client.get(reverse("admin-nurse-list"))
+
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
 def test_nurse_can_manage_availability(api_client: APIClient, nurse_user: object) -> None:
     """Nurses can create, list, update, and delete availability slots."""
     authenticate(api_client, nurse_user)

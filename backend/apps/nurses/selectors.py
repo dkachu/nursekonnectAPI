@@ -11,6 +11,14 @@ from apps.nurses.models import NurseAvailabilitySlot, NurseCredential, NurseProf
 class NurseProfileSelector:
     """Read nurse profiles with related user and specialization data."""
 
+    def list_for_admin(self) -> QuerySet[NurseProfile]:
+        """Return nurse profiles for administrator verification workflows."""
+        return (
+            NurseProfile.objects.select_related("user")
+            .prefetch_related("specializations")
+            .order_by("nck_verification_status", "user__email")
+        )
+
     def get_for_user(self, user: object) -> NurseProfile:
         """Return a nurse's own profile."""
         return get_object_or_404(

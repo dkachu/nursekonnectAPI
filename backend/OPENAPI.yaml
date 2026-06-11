@@ -19,6 +19,7 @@ tags:
   - name: Tracking
   - name: Visits
   - name: Ratings
+  - name: Notifications
   - name: Documentation
 paths:
   /api/schema/:
@@ -78,7 +79,7 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: JWT token pair
+          description: Access token and user context; refresh token is set in HttpOnly cookie.
           content:
             application/json:
               schema:
@@ -88,27 +89,38 @@ paths:
   /api/auth/refresh/:
     post:
       tags: [Authentication]
-      summary: Rotate refresh token
+      summary: Rotate refresh token from HttpOnly cookie
       security: []
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/RefreshRequest"
       responses:
         "200":
-          description: New token pair
+          description: New access token; rotated refresh token is set in HttpOnly cookie.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/RefreshResponse"
+  /api/auth/me/:
+    get:
+      tags: [Authentication]
+      summary: Return current authenticated user context
+      responses:
+        "200":
+          description: Current user context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
   /api/auth/logout/:
     post:
       tags: [Authentication]
-      summary: Blacklist refresh token
+      summary: Blacklist refresh token and clear refresh cookie
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
@@ -513,6 +525,42 @@ paths:
       responses:
         "201":
           description: Rating created
+  /api/notifications/:
+    get:
+      tags: [Notifications]
+      summary: List authenticated user's notifications
+      responses:
+        "200":
+          description: Paginated notification list
+  /api/notifications/unread-count/:
+    get:
+      tags: [Notifications]
+      summary: Count unread notifications
+      responses:
+        "200":
+          description: Unread notification count
+  /api/notifications/{notification_id}/mark-read/:
+    post:
+      tags: [Notifications]
+      summary: Mark one notification as read
+      parameters:
+        - in: path
+          name: notification_id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated notification
+        "404":
+          description: Notification not found
+  /api/notifications/mark-all-read/:
+    post:
+      tags: [Notifications]
+      summary: Mark all owned notifications as read
+      responses:
+        "200":
+          description: Updated notification count
 components:
   securitySchemes:
     bearerAuth:
@@ -608,10 +656,10 @@ components:
           format: password
     RefreshRequest:
       type: object
-      required: [refresh]
       properties:
         refresh:
           type: string
+          description: Optional fallback for non-browser API clients. Browsers use HttpOnly cookie.
     OTPVerifyRequest:
       type: object
       required: [purpose, code]
@@ -649,6 +697,10 @@ components:
           type: boolean
         phone_verified:
           type: boolean
+        profile:
+          type: object
+          nullable: true
+          additionalProperties: true
     UserEnvelope:
       type: object
       properties:
@@ -659,16 +711,12 @@ components:
       properties:
         access:
           type: string
-        refresh:
-          type: string
         user:
           $ref: "#/components/schemas/User"
     RefreshResponse:
       type: object
       properties:
         access:
-          type: string
-        refresh:
           type: string
     LocationUpdate:
       type: object

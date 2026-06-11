@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Logout a user by blacklisting a refresh token.
+Logout a user by blacklisting the refresh token and clearing the refresh cookie.
 
 ## Endpoint URL
 
@@ -22,6 +22,10 @@ JWT access token required.
 
 ## Request Schema
 
+No body is required for browser clients. The refresh token is read from the `nursekonnect_refresh` HttpOnly cookie.
+
+Non-browser API clients may submit a fallback body:
+
 ```json
 {
   "refresh": "jwt_refresh_token"
@@ -40,4 +44,5 @@ JWT access token required.
 ## Business Rules
 
 - Logout does not delete the user.
-- The submitted refresh token is blacklisted.
+- The refresh token is blacklisted when present.
+- The refresh cookie is cleared.

@@ -62,9 +62,11 @@ class Notification(TimeStampedModel):
     payload = models.JSONField(default=dict, blank=True)
     resource = models.CharField(max_length=100, blank=True)
     resource_id = models.CharField(max_length=64, blank=True)
+    is_read = models.BooleanField(default=False)
 
     class Meta:
         indexes = [
+            models.Index(fields=["recipient", "is_read", "created_at"]),
             models.Index(fields=["recipient", "status", "created_at"]),
             models.Index(fields=["notification_type", "created_at"]),
             models.Index(fields=["resource", "resource_id"]),

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.conf import settings
 from rest_framework import status
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -12,10 +13,8 @@ from rest_framework.views import APIView
 
 from apps.accounts.serializers import (
     LoginSerializer,
-    LogoutSerializer,
     OTPResendSerializer,
     OTPVerifySerializer,
-    RefreshSerializer,
     RegisterSerializer,
     UserSerializer,
 )
@@ -31,6 +30,44 @@ def request_ip(request: Request) -> str | None:
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR")
+
+
+def refresh_cookie_kwargs() -> dict[str, object]:
+    """Return secure refresh-cookie settings."""
+    return {
+        "httponly": True,
+        "secure": settings.AUTH_REFRESH_COOKIE_SECURE,
+        "samesite": settings.AUTH_REFRESH_COOKIE_SAMESITE,
+        "path": settings.AUTH_REFRESH_COOKIE_PATH,
+        "max_age": int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+    }
+
+
+def set_refresh_cookie(response: Response, refresh_token: str) -> None:
+    """Store refresh token in an HttpOnly cookie."""
+    response.set_cookie(
+        settings.AUTH_REFRESH_COOKIE_NAME,
+        refresh_token,
+        **refresh_cookie_kwargs(),
+    )
+
+
+def clear_refresh_cookie(response: Response) -> None:
+    """Clear the refresh-token cookie."""
+    response.delete_cookie(
+        settings.AUTH_REFRESH_COOKIE_NAME,
+        path=settings.AUTH_REFRESH_COOKIE_PATH,
+        samesite=settings.AUTH_REFRESH_COOKIE_SAMESITE,
+    )
+
+
+def refresh_token_from_request(request: Request) -> str | None:
+    """Read refresh token from secure cookie, with body fallback for API clients."""
+    cookie_token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
+    if cookie_token:
+        return cookie_token
+    body_token = request.data.get("refresh") if isinstance(request.data, dict) else None
+    return str(body_token) if body_token else None
 
 
 class RegisterView(APIView):
@@ -77,7 +114,7 @@ class LoginView(APIView):
     throttle_scope = "auth_login"
 
     def post(self, request: Request) -> Response:
-        """Return access and refresh tokens."""
+        """Return access token and set refresh token in an HttpOnly cookie."""
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         token_service = TokenService()
@@ -101,17 +138,13 @@ class LoginView(APIView):
             resource_id=user.id,
             ip_address=request_ip(request),
         )
-        return Response(
-            {
-                "access": tokens.access,
-                "refresh": tokens.refresh,
-                "user": UserSerializer(user).data,
-            }
-        )
+        response = Response({"access": tokens.access, "user": UserSerializer(user).data})
+        set_refresh_cookie(response, tokens.refresh)
+        return response
 
 
 class RefreshView(APIView):
-    """Rotate a refresh token and return new tokens."""
+    """Rotate a refresh token from cookie or body and return a new access token."""
 
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -119,13 +152,16 @@ class RefreshView(APIView):
 
     def post(self, request: Request) -> Response:
         """Refresh JWT credentials."""
-        serializer = RefreshSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        refresh_token = refresh_token_from_request(request)
+        if not refresh_token:
+            raise ValidationError({"refresh": "Refresh token is required."})
         try:
-            tokens = TokenService().refresh_access(serializer.validated_data["refresh"])
+            tokens = TokenService().refresh_access(refresh_token)
         except ValueError as exc:
             raise ValidationError({"refresh": str(exc)}) from exc
-        return Response({"access": tokens.access, "refresh": tokens.refresh})
+        response = Response({"access": tokens.access})
+        set_refresh_cookie(response, tokens.refresh)
+        return response
 
 
 class LogoutView(APIView):
@@ -137,10 +173,10 @@ class LogoutView(APIView):
 
     def post(self, request: Request) -> Response:
         """Logout the current user by blacklisting their refresh token."""
-        serializer = LogoutSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        refresh_token = refresh_token_from_request(request)
         try:
-            TokenService().blacklist(serializer.validated_data["refresh"])
+            if refresh_token:
+                TokenService().blacklist(refresh_token)
         except ValueError as exc:
             raise ValidationError({"refresh": str(exc)}) from exc
         AuditLogService().record(
@@ -150,7 +186,19 @@ class LogoutView(APIView):
             resource_id=request.user.id,
             ip_address=request_ip(request),
         )
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        clear_refresh_cookie(response)
+        return response
+
+
+class CurrentUserView(APIView):
+    """Return the authenticated user's context for session restoration."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        """Return current user and non-medical profile metadata."""
+        return Response({"user": UserSerializer(request.user).data})
 
 
 class VerifyOTPView(APIView):

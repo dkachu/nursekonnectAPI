@@ -269,6 +269,29 @@ class AdminNurseVerificationView(APIView):
         return Response(NurseProfileSerializer(nurse).data)
 
 
+class AdminNurseListView(APIView):
+    """List nurse profiles for administrator verification workflows."""
+
+    permission_classes = [IsAuthorizedAdmin]
+
+    def get(self, request: Request) -> Response:
+        """Return nurse profiles visible to authorized administrators."""
+        nurses = NurseProfileSelector().list_for_admin()
+        return Response(NurseProfileSerializer(nurses, many=True).data)
+
+
+class AdminNurseCredentialListView(APIView):
+    """List uploaded credentials for an administrator-selected nurse."""
+
+    permission_classes = [IsAuthorizedAdmin]
+
+    def get(self, request: Request, nurse_id: int) -> Response:
+        """Return credentials for a nurse under review."""
+        nurse = NurseProfileSelector().get_by_id(nurse_id)
+        credentials = NurseCredentialSelector().list_for_nurse(nurse)
+        return Response(NurseCredentialSerializer(credentials, many=True).data)
+
+
 class AdminNurseCredentialReviewView(APIView):
     """Review an uploaded nurse credential."""
 

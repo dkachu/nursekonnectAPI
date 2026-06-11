@@ -5,7 +5,9 @@ from __future__ import annotations
 from django.urls import path
 
 from apps.nurses.views import (
+    AdminNurseCredentialListView,
     AdminNurseCredentialReviewView,
+    AdminNurseListView,
     AdminNurseReputationRecalculateView,
     AdminNurseVerificationView,
     NCKVerificationPortalRedirectView,
@@ -53,6 +55,16 @@ urlpatterns = [
         name="nurse-availability-detail",
     ),
     path("nurse/status/", NurseStatusView.as_view(), name="nurse-status"),
+    path(
+        "admin/nurses/",
+        AdminNurseListView.as_view(),
+        name="admin-nurse-list",
+    ),
+    path(
+        "admin/nurses/<int:nurse_id>/credentials/",
+        AdminNurseCredentialListView.as_view(),
+        name="admin-nurse-credential-list",
+    ),
     path(
         "admin/nurses/<int:nurse_id>/verification/",
         AdminNurseVerificationView.as_view(),

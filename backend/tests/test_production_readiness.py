@@ -57,6 +57,10 @@ def test_required_api_docs_exist() -> None:
         "nurse_profile.md",
         "nurse_specializations.md",
         "nurse_status.md",
+        "notifications_list.md",
+        "notifications_mark_all_read.md",
+        "notifications_mark_read.md",
+        "notifications_unread_count.md",
         "openapi_schema.md",
         "patient_dependents.md",
         "patient_emergency_contacts.md",
@@ -114,6 +118,10 @@ def test_openapi_artifact_mentions_all_required_paths() -> None:
         "/api/tracking/location/",
         "/api/visit-notes/",
         "/api/ratings/",
+        "/api/notifications/",
+        "/api/notifications/unread-count/",
+        "/api/notifications/{notification_id}/mark-read/",
+        "/api/notifications/mark-all-read/",
     ]
 
     missing = [path for path in required_paths if path not in schema]

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Rotate a refresh token and issue a new access and refresh token pair.
+Rotate a refresh token from the HttpOnly cookie and issue a new access token.
 
 ## Endpoint URL
 
@@ -22,6 +22,10 @@ Not required.
 
 ## Request Schema
 
+No request body is required for browser clients. The refresh token is read from the `nursekonnect_refresh` HttpOnly cookie.
+
+Non-browser API clients may submit a fallback body:
+
 ```json
 {
   "refresh": "jwt_refresh_token"
@@ -32,10 +36,11 @@ Not required.
 
 ```json
 {
-  "access": "new_jwt_access_token",
-  "refresh": "new_jwt_refresh_token"
+  "access": "new_jwt_access_token"
 }
 ```
+
+The response also sets a rotated refresh cookie.
 
 ## Error Responses
 
@@ -45,3 +50,4 @@ Not required.
 
 - Refresh tokens rotate.
 - Old refresh tokens are blacklisted when rotation succeeds.
+- Refresh tokens are not returned in the response body.

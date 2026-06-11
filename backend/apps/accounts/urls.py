@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.urls import path
 
 from apps.accounts.views import (
+    CurrentUserView,
     LoginView,
     LogoutView,
     RefreshView,
@@ -16,6 +17,7 @@ from apps.accounts.views import (
 urlpatterns = [
     path("register/", RegisterView.as_view(), name="auth-register"),
     path("login/", LoginView.as_view(), name="auth-login"),
+    path("me/", CurrentUserView.as_view(), name="auth-me"),
     path("refresh/", RefreshView.as_view(), name="auth-refresh"),
     path("logout/", LogoutView.as_view(), name="auth-logout"),
     path("verify-otp/", VerifyOTPView.as_view(), name="auth-verify-otp"),

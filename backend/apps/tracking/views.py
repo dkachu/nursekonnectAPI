@@ -4,15 +4,18 @@ from __future__ import annotations
 
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.requests.selectors import CareRequestSelector
 from apps.tracking.serializers import (
     LocationUpdateResponseSerializer,
     LocationUpdateSerializer,
     TrackingLocationSerializer,
 )
+from apps.tracking.selectors import TrackingLocationSelector
 from apps.tracking.services.location_updates import LocationUpdateInput, LocationUpdateService
 
 
@@ -62,3 +65,24 @@ class TrackingLocationView(APIView):
             TrackingLocationSerializer(tracking_location).data,
             status=status.HTTP_201_CREATED,
         )
+
+
+class TrackingRequestLocationListView(APIView):
+    """List tracking points for a visible assigned care request."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, request_id: int) -> Response:
+        """Return recent journey tracking points for patient, assigned nurse, or admin."""
+        try:
+            care_request = CareRequestSelector().get_for_actor(
+                actor=request.user,
+                request_id=request_id,
+            )
+            locations = TrackingLocationSelector().recent_for_request(
+                care_request,
+                actor=request.user,
+            )
+        except (PermissionError, ObjectDoesNotExist) as error:
+            return service_error_response(error)
+        return Response(TrackingLocationSerializer(locations, many=True).data)

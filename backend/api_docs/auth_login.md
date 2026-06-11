@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Authenticate a user with email and password and issue JWT credentials.
+Authenticate a user with email and password, return a short-lived access token, and set the refresh token in an HttpOnly cookie.
 
 ## Endpoint URL
 
@@ -34,7 +34,6 @@ Not required.
 ```json
 {
   "access": "jwt_access_token",
-  "refresh": "jwt_refresh_token",
   "user": {
     "id": 1,
     "email": "user@example.com",
@@ -47,6 +46,12 @@ Not required.
 }
 ```
 
+The response also sets:
+
+```http
+Set-Cookie: nursekonnect_refresh=<jwt_refresh_token>; HttpOnly; Secure; SameSite=Lax; Path=/api/auth/
+```
+
 ## Error Responses
 
 - `401 Unauthorized`: invalid credentials or inactive account.
@@ -56,3 +61,5 @@ Not required.
 - Authentication uses email only.
 - Usernames are not supported.
 - Inactive accounts cannot authenticate.
+- Refresh tokens are not returned in the response body for browser clients.
+- Refresh tokens are stored in an HttpOnly cookie and rotated by `/api/auth/refresh/`.
