@@ -9,6 +9,7 @@ from apps.nurses.views import (
     AdminNurseReputationRecalculateView,
     AdminNurseVerificationView,
     NCKVerificationPortalRedirectView,
+    NearbyNurseListView,
     NurseAvailabilityDetailView,
     NurseAvailabilityListCreateView,
     NurseCredentialListCreateView,
@@ -24,6 +25,7 @@ urlpatterns = [
         NCKVerificationPortalRedirectView.as_view(),
         name="nck-license-status-redirect",
     ),
+    path("nurses/nearby/", NearbyNurseListView.as_view(), name="nearby-nurses"),
     path("nurse/profile/", NurseProfileView.as_view(), name="nurse-profile"),
     path(
         "nurse/specializations/",

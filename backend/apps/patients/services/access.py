@@ -22,9 +22,14 @@ class PatientMedicalAccessService:
         return False
 
     def has_assigned_patient_access(self, *, actor: object, patient: PatientProfile) -> bool:
-        """Return assigned-nurse access once care requests exist.
+        """Return whether a nurse is assigned to an active or completed patient request."""
+        from apps.requests.models import CareRequest, CareRequestStatus
 
-        The care request domain is not implemented yet, so nurse access is
-        denied by default until request assignment can be checked.
-        """
-        return False
+        return (
+            CareRequest.objects.filter(
+                patient=patient,
+                assigned_nurse__user=actor,
+            )
+            .exclude(status__in=[CareRequestStatus.CANCELLED, CareRequestStatus.EXPIRED])
+            .exists()
+        )

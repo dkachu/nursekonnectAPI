@@ -9,8 +9,10 @@ from apps.nurses.models import (
     NurseCredential,
     NurseProfile,
     NurseSpecialization,
+    NurseSpecializationCode,
     NurseVerificationStatus,
 )
+from apps.nurses.services.discovery import NearbyNurseResult
 
 
 class NurseSpecializationSerializer(serializers.ModelSerializer[NurseSpecialization]):
@@ -171,3 +173,69 @@ class NurseAvailabilitySlotSerializer(serializers.ModelSerializer[NurseAvailabil
         if start_time and end_time and start_time >= end_time:
             raise serializers.ValidationError("start_time must be before end_time.")
         return attrs
+
+
+class NearbyNurseQuerySerializer(serializers.Serializer):
+    """Validate nearby nurse discovery filters."""
+
+    specialization = serializers.ChoiceField(
+        choices=NurseSpecializationCode.choices,
+        required=False,
+    )
+    limit = serializers.IntegerField(required=False, min_value=1, max_value=50, default=20)
+
+
+class NearbyNurseResultSerializer(serializers.Serializer):
+    """Serialize privacy-safe nearby nurse discovery results."""
+
+    id = serializers.SerializerMethodField()
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
+    profile_photo = serializers.SerializerMethodField()
+    years_of_experience = serializers.SerializerMethodField()
+    rating = serializers.SerializerMethodField()
+    reputation_score = serializers.SerializerMethodField()
+    average_response_seconds = serializers.SerializerMethodField()
+    specializations = serializers.SerializerMethodField()
+    specialization_match = serializers.BooleanField()
+    distance_km = serializers.FloatField()
+    estimated_travel_time = serializers.IntegerField()
+
+    def get_id(self, obj: NearbyNurseResult) -> int:
+        """Return the nurse profile identifier."""
+        return obj.nurse.id
+
+    def get_first_name(self, obj: NearbyNurseResult) -> str:
+        """Return the nurse user's first name."""
+        return obj.nurse.user.first_name
+
+    def get_last_name(self, obj: NearbyNurseResult) -> str:
+        """Return the nurse user's last name."""
+        return obj.nurse.user.last_name
+
+    def get_profile_photo(self, obj: NearbyNurseResult) -> str:
+        """Return the profile photo URL or an empty string."""
+        return obj.nurse.profile_photo.url if obj.nurse.profile_photo else ""
+
+    def get_years_of_experience(self, obj: NearbyNurseResult) -> int:
+        """Return the nurse's years of experience."""
+        return obj.nurse.years_of_experience
+
+    def get_rating(self, obj: NearbyNurseResult) -> str:
+        """Return the nurse's public rating."""
+        return str(obj.nurse.rating)
+
+    def get_reputation_score(self, obj: NearbyNurseResult) -> str:
+        """Return the nurse's reputation score."""
+        return str(obj.nurse.reputation_score)
+
+    def get_average_response_seconds(self, obj: NearbyNurseResult) -> int:
+        """Return the nurse's average response speed signal."""
+        return obj.nurse.average_response_seconds
+
+    def get_specializations(self, obj: NearbyNurseResult) -> list[dict[str, str]]:
+        """Return prefetched specialization summaries."""
+        return [
+            {"code": specialization.code, "name": specialization.name}
+            for specialization in obj.nurse.specializations.all()
+        ]

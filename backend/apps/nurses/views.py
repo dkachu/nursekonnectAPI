@@ -9,6 +9,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.permissions import IsPatient
 from apps.nurses.models import NurseSpecialization
 from apps.nurses.permissions import IsAuthorizedAdmin, IsNurseUser
 from apps.nurses.selectors import (
@@ -17,6 +18,8 @@ from apps.nurses.selectors import (
     NurseProfileSelector,
 )
 from apps.nurses.serializers import (
+    NearbyNurseQuerySerializer,
+    NearbyNurseResultSerializer,
     NurseAvailabilitySlotSerializer,
     NurseCredentialReviewSerializer,
     NurseCredentialSerializer,
@@ -28,6 +31,7 @@ from apps.nurses.serializers import (
 )
 from apps.nurses.services.availability import NurseAvailabilityService
 from apps.nurses.services.credentials import NurseCredentialService
+from apps.nurses.services.discovery import NearbyNurseDiscoveryService
 from apps.nurses.services.nck import NCKVerificationPortalService
 from apps.nurses.services.profiles import NurseProfileService
 from apps.nurses.services.reputation import NurseReputationService
@@ -70,6 +74,26 @@ class NurseProfileView(APIView):
         except (PermissionError, ValueError) as error:
             return service_error_response(error)
         return Response(NurseProfileSerializer(nurse).data)
+
+
+class NearbyNurseListView(APIView):
+    """Return road-distance ranked nearby nurses for an authenticated patient."""
+
+    permission_classes = [IsPatient]
+
+    def get(self, request: Request) -> Response:
+        """Discover nearby eligible nurses using PostGIS and OSRM."""
+        serializer = NearbyNurseQuerySerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        try:
+            results = NearbyNurseDiscoveryService().discover(
+                patient=request.user.patient_profile,
+                specialization_code=serializer.validated_data.get("specialization"),
+                limit=serializer.validated_data["limit"],
+            )
+        except ValueError as error:
+            return service_error_response(error)
+        return Response(NearbyNurseResultSerializer(results, many=True).data)
 
 
 class NCKVerificationPortalRedirectView(APIView):

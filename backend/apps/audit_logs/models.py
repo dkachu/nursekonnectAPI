@@ -8,6 +8,35 @@ from django.db import models
 from apps.common.models import TimeStampedModel
 
 
+class AuditLog(TimeStampedModel):
+    """Append-only audit record for sensitive platform actions."""
+
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        related_name="audit_logs",
+    )
+    action = models.CharField(max_length=100, db_index=True)
+    resource = models.CharField(max_length=100)
+    resource_id = models.CharField(max_length=64)
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["actor", "created_at"]),
+            models.Index(fields=["resource", "resource_id"]),
+            models.Index(fields=["action", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        """Return a readable log label."""
+        return f"AuditLog<{self.actor_id}:{self.action}:{self.resource}>"
+
+
 class MedicalAccessLog(TimeStampedModel):
     """Append-only record of protected medical data access."""
 
