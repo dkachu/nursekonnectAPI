@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      DJANGO_SETTINGS_MODULE: core.settings.test
+      DJANGO_SECRET_KEY: ci-secret-key-with-at-least-thirty-two-bytes
+      MEDICAL_DATA_FERNET_KEY: ""
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements/base.txt
+            backend/requirements/dev.txt
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y binutils gdal-bin libgdal-dev libproj-dev
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements/dev.txt
+
+      - name: Ruff
+        run: python -m ruff check backend
+
+      - name: Black
+        run: python -m black --check backend
+
+      - name: Django system check
+        run: python backend/manage.py check
+
+      - name: Migration drift check
+        run: python backend/manage.py makemigrations --check --dry-run
+
+      - name: Tests with coverage
+        run: python -m pytest --cov --cov-report=term-missing
+
+  docker:
+    name: Docker Build Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - backend
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate Compose file
+        run: docker compose config --quiet
+
+      - name: Build backend image
+        run: docker compose build backend

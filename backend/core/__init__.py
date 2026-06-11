@@ -1,0 +1,1 @@
+"""NurseKonnect Django project package."""
