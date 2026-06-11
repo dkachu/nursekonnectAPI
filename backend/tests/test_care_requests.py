@@ -18,7 +18,13 @@ from apps.audit_logs.models import AuditLog
 from apps.nurses.models import NurseProfile, NurseStatus, NurseVerificationStatus
 from apps.patients.models import PatientDependent, PatientProfile
 from apps.patients.services.access import PatientMedicalAccessService
-from apps.requests.models import CareRequest, CareRequestPriority, CareRequestStatus
+from apps.requests.models import (
+    CareRequest,
+    CareRequestPriority,
+    CareRequestStatus,
+    RequestOffer,
+    RequestOfferStatus,
+)
 
 User = get_user_model()
 
@@ -238,6 +244,14 @@ def test_assigned_nurse_transitions_request_to_completed(api_client: APIClient) 
         ("care-request-start-visit", CareRequestStatus.IN_PROGRESS),
         ("care-request-complete", CareRequestStatus.COMPLETED),
     ]:
+        if route_name == "care-request-arrived":
+            nurse_user.nurse_profile.current_location = (
+                patient_user.patient_profile.current_location
+            )
+            nurse_user.nurse_profile.last_location_update = timezone.now()
+            nurse_user.nurse_profile.save(
+                update_fields=["current_location", "last_location_update", "updated_at"]
+            )
         response = api_client.post(reverse(route_name, kwargs={"request_id": care_request.id}))
         assert response.status_code == 200
         assert response.data["status"] == expected_status
@@ -280,6 +294,17 @@ def test_list_and_detail_respect_actor_visibility(api_client: APIClient) -> None
     nurse_user = create_nurse()
     own_request = create_request_for_patient(patient_user)
     create_request_for_patient(other_patient_user)
+    RequestOffer.objects.create(
+        care_request=own_request,
+        nurse=nurse_user.nurse_profile,
+        status=RequestOfferStatus.OFFERED,
+        radius_km=10,
+        distance_km="3.50",
+        estimated_travel_time=8,
+        specialization_match=True,
+        rank=1,
+        expires_at=timezone.now() + timedelta(minutes=2),
+    )
 
     authenticate(api_client, patient_user)
     patient_list = api_client.get(reverse("care-request-list"))
@@ -293,10 +318,11 @@ def test_list_and_detail_respect_actor_visibility(api_client: APIClient) -> None
     assert patient_list.status_code == 200
     assert len(patient_list.data) == 1
     assert nurse_list.status_code == 200
-    assert len(nurse_list.data) == 2
+    assert len(nurse_list.data) == 1
     assert nurse_detail.status_code == 200
     assert nurse_detail.data["patient_first_name"] == "Care"
     assert nurse_detail.data["patient_last_name"] == ""
+    assert nurse_detail.data["description"] == ""
 
 
 @pytest.mark.django_db

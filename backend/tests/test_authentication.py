@@ -16,6 +16,14 @@ from apps.accounts.permissions import IsAdmin, IsNurse, IsOwner, IsPatient
 from apps.accounts.services.registration import RegistrationInput, RegistrationService
 from apps.accounts.services.tokens import TokenService
 from apps.accounts.services.verification import OTPService
+from apps.accounts.views import (
+    LoginView,
+    RefreshView,
+    RegisterView,
+    ResendOTPView,
+    VerifyOTPView,
+)
+from apps.audit_logs.models import AuditLog
 from apps.nurses.models import NurseProfile, NurseVerificationStatus
 from apps.patients.models import PatientProfile
 
@@ -70,6 +78,7 @@ def test_patient_registration_creates_user_profile_and_otps(
     assert PatientProfile.objects.filter(user=user, phone_number="+254712345678").exists()
     assert AuthenticationOTP.objects.filter(user=user, purpose=OTPPurpose.EMAIL).count() == 1
     assert AuthenticationOTP.objects.filter(user=user, purpose=OTPPurpose.PHONE).count() == 1
+    assert AuditLog.objects.filter(action="AUTH_REGISTERED", actor=user).exists()
 
 
 @pytest.mark.django_db
@@ -146,6 +155,7 @@ def test_login_returns_token_pair(api_client: APIClient, patient_payload: dict[s
     assert response.data["access"]
     assert response.data["refresh"]
     assert response.data["user"]["email"] == patient_payload["email"]
+    assert AuditLog.objects.filter(action="AUTH_LOGIN_SUCCEEDED").exists()
 
 
 @pytest.mark.django_db
@@ -158,6 +168,7 @@ def test_login_rejects_invalid_credentials(api_client: APIClient) -> None:
     )
 
     assert response.status_code == 401
+    assert AuditLog.objects.filter(action="AUTH_LOGIN_FAILED").exists()
 
 
 @pytest.mark.django_db
@@ -212,6 +223,7 @@ def test_logout_blacklists_refresh_token(
 
     assert response.status_code == 204
     assert BlacklistedToken.objects.count() == 1
+    assert AuditLog.objects.filter(action="AUTH_LOGGED_OUT").exists()
 
 
 @pytest.mark.django_db
@@ -246,6 +258,7 @@ def test_verify_email_otp_marks_user_verified(
     assert response.status_code == 200
     assert response.data["user"]["email_verified"] is True
     assert User.objects.get(email=patient_payload["email"]).email_verified is True
+    assert AuditLog.objects.filter(action="AUTH_OTP_VERIFIED").exists()
 
 
 @pytest.mark.django_db
@@ -300,6 +313,7 @@ def test_resend_otp_consumes_previous_code(
     assert response.status_code == 200
     assert old_otp.consumed_at is not None
     assert AuthenticationOTP.objects.filter(user=user, purpose=OTPPurpose.PHONE).count() == 2
+    assert AuditLog.objects.filter(action="AUTH_OTP_RESENT").exists()
 
 
 @pytest.mark.django_db
@@ -558,8 +572,17 @@ def test_role_permissions() -> None:
     assert IsPatient().has_permission(Request(UserRole.PATIENT), None) is True
     assert IsPatient().has_permission(Request(UserRole.NURSE), None) is False
     assert IsNurse().has_permission(Request(UserRole.NURSE), None) is True
-    assert IsAdmin().has_permission(Request(UserRole.ADMIN), None) is True
+    assert IsAdmin().has_permission(Request(UserRole.ADMIN), None) is False
     assert IsAdmin().has_permission(Request(None), None) is False
+
+
+def test_auth_views_use_scoped_throttles() -> None:
+    """Authentication endpoints use dedicated abuse-control throttle scopes."""
+    assert RegisterView.throttle_scope == "auth_register"
+    assert LoginView.throttle_scope == "auth_login"
+    assert RefreshView.throttle_scope == "auth_refresh"
+    assert VerifyOTPView.throttle_scope == "otp_verify"
+    assert ResendOTPView.throttle_scope == "otp_resend"
 
 
 def test_owner_permission() -> None:

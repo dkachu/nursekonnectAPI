@@ -39,9 +39,9 @@ class EmergencyContactService:
         return contact
 
     def delete(self, *, actor: object, patient: PatientProfile, contact: EmergencyContact) -> None:
-        """Delete an owned emergency contact."""
+        """Soft-delete an owned emergency contact."""
         self._require_owner(actor=actor, patient=patient)
-        contact.delete()
+        contact.mark_deleted()
 
     def _require_owner(self, *, actor: object, patient: PatientProfile) -> None:
         """Ensure the actor owns the patient profile."""

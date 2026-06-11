@@ -40,11 +40,13 @@ class TrackingLocationSerializer(serializers.ModelSerializer[TrackingLocation]):
     latitude = serializers.SerializerMethodField()
     longitude = serializers.SerializerMethodField()
     location_stale = serializers.SerializerMethodField()
+    care_request_id = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = TrackingLocation
         fields = (
             "id",
+            "care_request_id",
             "latitude",
             "longitude",
             "recorded_at",

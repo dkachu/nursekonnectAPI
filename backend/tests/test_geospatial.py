@@ -15,6 +15,7 @@ from apps.accounts.models import UserRole
 from apps.accounts.services.tokens import TokenService
 from apps.nurses.models import NurseProfile, NurseStatus, NurseVerificationStatus
 from apps.patients.models import PatientProfile
+from apps.requests.models import CareRequest, CareRequestPriority, CareRequestStatus
 from apps.tracking.models import TrackingLocation
 from apps.tracking.selectors import LocationSelector, TrackingLocationSelector
 from apps.tracking.services.location_updates import (
@@ -110,8 +111,21 @@ def test_patient_location_update_stores_postgis_point(
 def test_nurse_tracking_location_records_history(
     api_client: APIClient,
     nurse_user: object,
+    patient_user: object,
 ) -> None:
     """Nurse tracking endpoint records immutable journey points and latest location."""
+    CareRequest.objects.create(
+        patient=patient_user.patient_profile,
+        service_type="GENERAL_NURSING",
+        priority=CareRequestPriority.NORMAL,
+        description="Tracking setup",
+        location=Point(36.821946, -1.292066, srid=4326),
+        requested_time=timezone.now(),
+        status=CareRequestStatus.NURSE_EN_ROUTE,
+        assigned_nurse=nurse_user.nurse_profile,
+        accepted_at=timezone.now(),
+        journey_started_at=timezone.now(),
+    )
     authenticate(api_client, nurse_user)
 
     response = api_client.post(
@@ -128,6 +142,7 @@ def test_nurse_tracking_location_records_history(
     nurse_user.nurse_profile.refresh_from_db()
     assert response.status_code == 201
     assert TrackingLocation.objects.count() == 1
+    assert TrackingLocation.objects.get().care_request is not None
     assert response.data["latitude"] == pytest.approx(-1.292066)
     assert nurse_user.nurse_profile.current_location.x == pytest.approx(36.821946)
 

@@ -30,12 +30,13 @@ Returns the care request with `status = ARRIVED`.
 
 ## Error Responses
 
-- `400`: request is not `NURSE_EN_ROUTE`.
+- `400`: request is not `NURSE_EN_ROUTE`, nurse GPS is stale, or nurse is farther than 100m.
 - `401`: missing or invalid JWT token.
 - `403`: actor is not the assigned nurse.
 - `404`: request does not exist.
 
 ## Business Rules
 
-- Arrival distance validation will be enforced by the tracking phase.
+- Nurse must be within 100 meters of the patient request location.
+- Distance is validated with PostGIS against the assigned nurse's latest GPS point.
 - Writes an audit log.

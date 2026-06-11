@@ -45,9 +45,9 @@ class PatientDependentService:
         patient: PatientProfile,
         dependent: PatientDependent,
     ) -> None:
-        """Delete an owned dependent."""
+        """Soft-delete an owned dependent."""
         self._require_owner(actor=actor, patient=patient)
-        dependent.delete()
+        dependent.mark_deleted()
 
     def _require_owner(self, *, actor: object, patient: PatientProfile) -> None:
         """Ensure the actor owns the patient profile."""

@@ -36,6 +36,9 @@ Authenticated patient account.
 
 Returns the care request with `status = PENDING`.
 
+Creating a request also starts intelligent nurse matching. The system creates offer records
+and notification records for up to the nearest 5 eligible nurses.
+
 ## Error Responses
 
 - `400`: missing fresh patient GPS location, unverified patient account, invalid dependent, invalid service type, or invalid priority.
@@ -47,4 +50,7 @@ Returns the care request with `status = PENDING`.
 - Patient email and phone must be verified.
 - Location comes from the patient's stored browser/mobile GPS update.
 - Manual request coordinates are not accepted.
+- Matching expands radius gradually using configured radius steps.
+- Matching respects nurse travel radius and required specialization.
+- Matching never broadcasts to the entire nurse network.
 - Request creation writes an audit log.

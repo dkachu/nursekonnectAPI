@@ -17,6 +17,13 @@ class TrackingLocation(TimeStampedModel):
         on_delete=models.CASCADE,
         related_name="tracking_locations",
     )
+    care_request = models.ForeignKey(
+        "requests.CareRequest",
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="tracking_locations",
+    )
     location = gis_models.PointField(
         geography=True,
         srid=4326,
@@ -28,6 +35,7 @@ class TrackingLocation(TimeStampedModel):
     class Meta:
         indexes = [
             models.Index(fields=["nurse", "recorded_at"]),
+            models.Index(fields=["care_request", "recorded_at"]),
             models.Index(fields=["recorded_at"]),
         ]
         ordering = ["-recorded_at"]

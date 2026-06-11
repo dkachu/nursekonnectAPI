@@ -44,6 +44,7 @@ class IsAdmin(BasePermission):
             request.user
             and request.user.is_authenticated
             and getattr(request.user, "role", None) == UserRole.ADMIN
+            and getattr(request.user, "is_staff", False)
         )
 
 

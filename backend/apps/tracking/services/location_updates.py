@@ -87,11 +87,21 @@ class LocationUpdateService:
         point = self.point_from_input(data)
         now = timezone.now()
         nurse = NurseProfile.objects.select_for_update().get(user=actor)
+        from apps.tracking.services.journey import JourneyTrackingService
+
+        journey_service = JourneyTrackingService()
+        care_request = journey_service.active_request_for_tracking(nurse=nurse)
+        journey_service.validate_tracking_cadence(
+            care_request=care_request,
+            nurse=nurse,
+            recorded_at=now,
+        )
         nurse.current_location = point
         nurse.last_location_update = now
         nurse.save(update_fields=["current_location", "last_location_update", "updated_at"])
         return TrackingLocation.objects.create(
             nurse=nurse,
+            care_request=care_request,
             location=point,
             recorded_at=now,
             accuracy_meters=data.accuracy_meters,

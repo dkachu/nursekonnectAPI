@@ -7,6 +7,7 @@ import sys
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -159,6 +160,16 @@ NCK_LICENSE_STATUS_URL = env(
 MAX_LOCATION_AGE_MINUTES = env_int("MAX_LOCATION_AGE_MINUTES", 15)
 NEARBY_NURSE_RADIUS_KM = env_int("NEARBY_NURSE_RADIUS_KM", 100)
 NEARBY_NURSE_CANDIDATE_LIMIT = env_int("NEARBY_NURSE_CANDIDATE_LIMIT", 50)
+MATCHING_NOTIFICATION_BATCH_SIZE = env_int("MATCHING_NOTIFICATION_BATCH_SIZE", 5)
+MATCHING_RADIUS_STEPS_KM = [
+    int(item) for item in env("MATCHING_RADIUS_STEPS_KM", "10,20,50,100").split(",") if item
+]
+REQUEST_OFFER_EXPIRY_MINUTES = env_int("REQUEST_OFFER_EXPIRY_MINUTES", 2)
+TRACKING_MIN_INTERVAL_SECONDS = env_int("TRACKING_MIN_INTERVAL_SECONDS", 30)
+TRACKING_MAX_INTERVAL_SECONDS = env_int("TRACKING_MAX_INTERVAL_SECONDS", 60)
+ARRIVAL_VERIFICATION_DISTANCE_METERS = env_int("ARRIVAL_VERIFICATION_DISTANCE_METERS", 100)
+JOURNEY_WARNING_AFTER_MINUTES = env_int("JOURNEY_WARNING_AFTER_MINUTES", 30)
+JOURNEY_CANCEL_AFTER_MINUTES = env_int("JOURNEY_CANCEL_AFTER_MINUTES", 60)
 OSRM_BASE_URL = env("OSRM_BASE_URL", "http://router.project-osrm.org")
 OSRM_REQUEST_TIMEOUT_SECONDS = env_int("OSRM_REQUEST_TIMEOUT_SECONDS", 5)
 
@@ -178,10 +189,17 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_CLASSES": (
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {
         "anon": env("DRF_ANON_THROTTLE_RATE", "100/hour"),
         "user": env("DRF_USER_THROTTLE_RATE", "1000/hour"),
+        "auth_register": env("DRF_AUTH_REGISTER_THROTTLE_RATE", "10/hour"),
+        "auth_login": env("DRF_AUTH_LOGIN_THROTTLE_RATE", "20/hour"),
+        "auth_refresh": env("DRF_AUTH_REFRESH_THROTTLE_RATE", "60/hour"),
+        "auth_logout": env("DRF_AUTH_LOGOUT_THROTTLE_RATE", "60/hour"),
+        "otp_verify": env("DRF_OTP_VERIFY_THROTTLE_RATE", "10/hour"),
+        "otp_resend": env("DRF_OTP_RESEND_THROTTLE_RATE", "5/hour"),
     },
 }
 
@@ -212,11 +230,14 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_TASK_ROUTES = {
     "apps.notifications.*": {"queue": "notifications"},
     "apps.audit_logs.*": {"queue": "audit"},
+    "apps.requests.tasks.*": {"queue": "matching"},
 }
 
 CORS_ALLOWED_ORIGINS = env_list("DJANGO_CORS_ALLOWED_ORIGINS")
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
@@ -243,8 +264,24 @@ if DJANGO_ENV == "test":
             "LOCATION": "nursekonnect-tests",
         }
     }
+    REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"].update(
+        {
+            "anon": "10000/hour",
+            "user": "10000/hour",
+            "auth_register": "10000/hour",
+            "auth_login": "10000/hour",
+            "auth_refresh": "10000/hour",
+            "auth_logout": "10000/hour",
+            "otp_verify": "10000/hour",
+            "otp_resend": "10000/hour",
+        }
+    )
 
 if DJANGO_ENV == "production":
+    if SECRET_KEY == "unsafe-local-development-key":
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
+    if MEDICAL_DATA_FERNET_KEY is None:
+        raise ImproperlyConfigured("MEDICAL_DATA_FERNET_KEY must be set in production.")
     DEBUG = False
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
     SECURE_HSTS_SECONDS = 31536000

@@ -25,11 +25,11 @@ class EmergencyContactSelector:
 
     def list_for_patient(self, patient: PatientProfile) -> QuerySet[EmergencyContact]:
         """Return emergency contacts for a patient."""
-        return patient.emergency_contacts.all()
+        return patient.emergency_contacts.filter(is_deleted=False)
 
     def get_for_patient(self, patient: PatientProfile, contact_id: int) -> EmergencyContact:
         """Return a single contact owned by a patient."""
-        return get_object_or_404(patient.emergency_contacts, id=contact_id)
+        return get_object_or_404(patient.emergency_contacts, id=contact_id, is_deleted=False)
 
 
 class PatientDependentSelector:
@@ -37,8 +37,8 @@ class PatientDependentSelector:
 
     def list_for_patient(self, patient: PatientProfile) -> QuerySet[PatientDependent]:
         """Return dependents for a patient."""
-        return patient.dependents.all()
+        return patient.dependents.filter(is_deleted=False)
 
     def get_for_patient(self, patient: PatientProfile, dependent_id: int) -> PatientDependent:
         """Return a single dependent owned by a patient."""
-        return get_object_or_404(patient.dependents, id=dependent_id)
+        return get_object_or_404(patient.dependents, id=dependent_id, is_deleted=False)

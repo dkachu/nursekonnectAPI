@@ -36,7 +36,11 @@ source = [
     "backend/apps/common",
     "backend/apps/patients",
     "backend/apps/nurses",
+    "backend/apps/notifications",
+    "backend/apps/ratings",
+    "backend/apps/requests",
     "backend/apps/tracking",
+    "backend/apps/visits",
 ]
 omit = ["*/migrations/*", "*/admin.py", "*/apps.py"]
 

@@ -7,7 +7,7 @@ from django.contrib.gis.db import models as gis_models
 from django.db import models
 
 from apps.common.fields import EncryptedTextField
-from apps.common.models import TimeStampedModel
+from apps.common.models import SoftDeleteModel, TimeStampedModel
 
 
 class Gender(models.TextChoices):
@@ -78,7 +78,7 @@ class PatientProfile(TimeStampedModel):
         return f"PatientProfile<{self.user_id}>"
 
 
-class EmergencyContact(TimeStampedModel):
+class EmergencyContact(TimeStampedModel, SoftDeleteModel):
     """Emergency contact for a patient."""
 
     patient = models.ForeignKey(
@@ -91,6 +91,10 @@ class EmergencyContact(TimeStampedModel):
     relationship = models.CharField(max_length=64)
 
     class Meta:
+        indexes = [
+            models.Index(fields=["patient", "is_deleted"]),
+            models.Index(fields=["is_deleted", "deleted_at"]),
+        ]
         ordering = ["name"]
 
     def __str__(self) -> str:
@@ -98,7 +102,7 @@ class EmergencyContact(TimeStampedModel):
         return f"EmergencyContact<{self.patient_id}:{self.name}>"
 
 
-class PatientDependent(TimeStampedModel):
+class PatientDependent(TimeStampedModel, SoftDeleteModel):
     """Dependent who can receive care under a patient account."""
 
     patient = models.ForeignKey(
@@ -113,6 +117,10 @@ class PatientDependent(TimeStampedModel):
     medical_notes = EncryptedTextField(blank=True, default="")
 
     class Meta:
+        indexes = [
+            models.Index(fields=["patient", "is_deleted"]),
+            models.Index(fields=["is_deleted", "deleted_at"]),
+        ]
         ordering = ["full_name"]
 
     def __str__(self) -> str:

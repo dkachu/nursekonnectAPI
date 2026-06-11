@@ -6,7 +6,7 @@ from django.db.models import Q, QuerySet
 from django.shortcuts import get_object_or_404
 
 from apps.accounts.models import UserRole
-from apps.requests.models import CareRequest
+from apps.requests.models import CareRequest, RequestOfferStatus
 
 
 class CareRequestSelector:
@@ -36,8 +36,12 @@ class CareRequestSelector:
 
         if role == UserRole.NURSE:
             return queryset.filter(
-                Q(status="PENDING", assigned_nurse__isnull=True) | Q(assigned_nurse__user=actor)
-            )
+                Q(assigned_nurse__user=actor)
+                | Q(
+                    offers__nurse__user=actor,
+                    offers__status=RequestOfferStatus.OFFERED,
+                )
+            ).distinct()
 
         if role == UserRole.ADMIN and getattr(actor, "is_staff", False):
             return queryset

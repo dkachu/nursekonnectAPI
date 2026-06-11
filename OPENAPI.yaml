@@ -1,0 +1,735 @@
+openapi: 3.0.3
+info:
+  title: NurseKonnect REST API
+  version: 1.0.0
+  description: Secure API-first home-based care platform for patients and verified nurses in Kenya.
+servers:
+  - url: https://api.nursekonnect.example
+    description: Production
+  - url: http://localhost:8000
+    description: Local Docker
+security:
+  - bearerAuth: []
+tags:
+  - name: Authentication
+  - name: Patients
+  - name: Nurses
+  - name: Location
+  - name: Care Requests
+  - name: Tracking
+  - name: Visits
+  - name: Ratings
+  - name: Documentation
+paths:
+  /api/schema/:
+    get:
+      tags: [Documentation]
+      summary: OpenAPI schema
+      security: []
+      responses:
+        "200":
+          description: OpenAPI YAML schema
+  /api/docs/swagger/:
+    get:
+      tags: [Documentation]
+      summary: Swagger UI
+      security: []
+      responses:
+        "200":
+          description: Swagger HTML
+  /api/docs/redoc/:
+    get:
+      tags: [Documentation]
+      summary: ReDoc UI
+      security: []
+      responses:
+        "200":
+          description: ReDoc HTML
+  /api/auth/register/:
+    post:
+      tags: [Authentication]
+      summary: Register a patient or nurse
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+  /api/auth/login/:
+    post:
+      tags: [Authentication]
+      summary: Login and issue JWT tokens
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: JWT token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/auth/refresh/:
+    post:
+      tags: [Authentication]
+      summary: Rotate refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: New token pair
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshResponse"
+  /api/auth/logout/:
+    post:
+      tags: [Authentication]
+      summary: Blacklist refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "204":
+          description: Logged out
+  /api/auth/verify-otp/:
+    post:
+      tags: [Authentication]
+      summary: Verify email or phone OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OTPVerifyRequest"
+      responses:
+        "200":
+          description: Verification updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserEnvelope"
+  /api/auth/resend-otp/:
+    post:
+      tags: [Authentication]
+      summary: Resend verification OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OTPResendRequest"
+      responses:
+        "200":
+          description: OTP expiry
+  /api/patient/profile/:
+    get:
+      tags: [Patients]
+      summary: Get patient profile
+      responses:
+        "200":
+          description: Patient profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientProfile"
+    patch:
+      tags: [Patients]
+      summary: Update patient profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatientProfilePatch"
+      responses:
+        "200":
+          description: Updated profile
+  /api/patient/emergency-contacts/:
+    get:
+      tags: [Patients]
+      summary: List emergency contacts
+      responses:
+        "200":
+          description: Emergency contacts
+    post:
+      tags: [Patients]
+      summary: Create emergency contact
+      responses:
+        "201":
+          description: Emergency contact created
+  /api/patient/emergency-contacts/{contact_id}/:
+    patch:
+      tags: [Patients]
+      summary: Update emergency contact
+      parameters:
+        - $ref: "#/components/parameters/contact_id"
+      responses:
+        "200":
+          description: Emergency contact updated
+    delete:
+      tags: [Patients]
+      summary: Soft-delete emergency contact
+      parameters:
+        - $ref: "#/components/parameters/contact_id"
+      responses:
+        "204":
+          description: Emergency contact deleted
+  /api/patient/dependents/:
+    get:
+      tags: [Patients]
+      summary: List dependents
+      responses:
+        "200":
+          description: Dependents
+    post:
+      tags: [Patients]
+      summary: Create dependent
+      responses:
+        "201":
+          description: Dependent created
+  /api/patient/dependents/{dependent_id}/:
+    patch:
+      tags: [Patients]
+      summary: Update dependent
+      parameters:
+        - $ref: "#/components/parameters/dependent_id"
+      responses:
+        "200":
+          description: Dependent updated
+    delete:
+      tags: [Patients]
+      summary: Soft-delete dependent
+      parameters:
+        - $ref: "#/components/parameters/dependent_id"
+      responses:
+        "204":
+          description: Dependent deleted
+  /api/patients/{patient_id}/medical-information/:
+    get:
+      tags: [Patients]
+      summary: Read protected medical information
+      parameters:
+        - $ref: "#/components/parameters/patient_id"
+      responses:
+        "200":
+          description: Protected medical information
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/nurse/profile/:
+    get:
+      tags: [Nurses]
+      summary: Get nurse profile
+      responses:
+        "200":
+          description: Nurse profile
+    patch:
+      tags: [Nurses]
+      summary: Update nurse profile
+      responses:
+        "200":
+          description: Nurse profile updated
+  /api/nurses/nearby/:
+    get:
+      tags: [Nurses]
+      summary: Discover nearby verified nurses
+      parameters:
+        - in: query
+          name: specialization
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+      responses:
+        "200":
+          description: Nearby nurse results with OSRM distance and ETA
+  /api/nurses/nck-license-status/:
+    get:
+      tags: [Nurses]
+      summary: Redirect to official NCK license portal
+      security: []
+      responses:
+        "302":
+          description: Redirect
+  /api/nurse/specializations/:
+    get:
+      tags: [Nurses]
+      summary: List supported nurse specializations
+      responses:
+        "200":
+          description: Specializations
+  /api/nurse/profile/specializations/:
+    put:
+      tags: [Nurses]
+      summary: Replace nurse specializations
+      responses:
+        "200":
+          description: Nurse profile updated
+  /api/nurse/credentials/:
+    get:
+      tags: [Nurses]
+      summary: List uploaded credentials
+      responses:
+        "200":
+          description: Credentials
+    post:
+      tags: [Nurses]
+      summary: Upload credential image
+      responses:
+        "201":
+          description: Credential uploaded
+  /api/nurse/availability/:
+    get:
+      tags: [Nurses]
+      summary: List availability slots
+      responses:
+        "200":
+          description: Availability slots
+    post:
+      tags: [Nurses]
+      summary: Create availability slot
+      responses:
+        "201":
+          description: Availability slot created
+  /api/nurse/availability/{slot_id}/:
+    patch:
+      tags: [Nurses]
+      summary: Update availability slot
+      parameters:
+        - $ref: "#/components/parameters/slot_id"
+      responses:
+        "200":
+          description: Slot updated
+    delete:
+      tags: [Nurses]
+      summary: Delete availability slot
+      parameters:
+        - $ref: "#/components/parameters/slot_id"
+      responses:
+        "204":
+          description: Slot deleted
+  /api/nurse/status/:
+    post:
+      tags: [Nurses]
+      summary: Update nurse status and visibility
+      responses:
+        "200":
+          description: Nurse profile updated
+  /api/admin/nurses/{nurse_id}/verification/:
+    patch:
+      tags: [Nurses]
+      summary: Admin nurse verification decision
+      parameters:
+        - $ref: "#/components/parameters/nurse_id"
+      responses:
+        "200":
+          description: Nurse updated
+  /api/admin/nurses/{nurse_id}/credentials/{credential_id}/review/:
+    patch:
+      tags: [Nurses]
+      summary: Admin credential review
+      parameters:
+        - $ref: "#/components/parameters/nurse_id"
+        - $ref: "#/components/parameters/credential_id"
+      responses:
+        "200":
+          description: Credential reviewed
+  /api/admin/nurses/{nurse_id}/reputation/recalculate/:
+    post:
+      tags: [Nurses]
+      summary: Recalculate nurse reputation
+      parameters:
+        - $ref: "#/components/parameters/nurse_id"
+      responses:
+        "200":
+          description: Nurse profile updated
+  /api/location/update/:
+    post:
+      tags: [Location]
+      summary: Update current GPS location
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationUpdate"
+      responses:
+        "200":
+          description: Location updated
+  /api/requests/:
+    get:
+      tags: [Care Requests]
+      summary: List visible care requests
+      responses:
+        "200":
+          description: Care requests
+    post:
+      tags: [Care Requests]
+      summary: Create care request
+      responses:
+        "201":
+          description: Request created
+  /api/requests/{request_id}/:
+    get:
+      tags: [Care Requests]
+      summary: Get care request detail
+      parameters:
+        - $ref: "#/components/parameters/request_id"
+      responses:
+        "200":
+          description: Care request
+  /api/requests/{request_id}/accept/:
+    post:
+      tags: [Care Requests]
+      summary: Accept request as offered nurse
+      parameters:
+        - $ref: "#/components/parameters/request_id"
+      responses:
+        "200":
+          description: Request accepted
+  /api/requests/{request_id}/start-journey/:
+    post:
+      tags: [Care Requests]
+      summary: Start nurse journey
+      parameters:
+        - $ref: "#/components/parameters/request_id"
+      responses:
+        "200":
+          description: Journey started
+  /api/requests/{request_id}/arrived/:
+    post:
+      tags: [Care Requests]
+      summary: Mark nurse arrived within 100m
+      parameters:
+        - $ref: "#/components/parameters/request_id"
+      responses:
+        "200":
+          description: Nurse arrived
+  /api/requests/{request_id}/start-visit/:
+    post:
+      tags: [Care Requests]
+      summary: Start visit after proximity validation
+      parameters:
+        - $ref: "#/components/parameters/request_id"
+      responses:
+        "200":
+          description: Visit started
+  /api/requests/{request_id}/complete/:
+    post:
+      tags: [Care Requests]
+      summary: Complete visit
+      parameters:
+        - $ref: "#/components/parameters/request_id"
+      responses:
+        "200":
+          description: Request completed
+  /api/requests/{request_id}/cancel/:
+    post:
+      tags: [Care Requests]
+      summary: Cancel request
+      parameters:
+        - $ref: "#/components/parameters/request_id"
+      responses:
+        "200":
+          description: Request cancelled
+  /api/tracking/location/:
+    post:
+      tags: [Tracking]
+      summary: Record en-route nurse GPS point
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LocationUpdate"
+      responses:
+        "201":
+          description: Tracking point recorded
+  /api/visit-notes/:
+    get:
+      tags: [Visits]
+      summary: List visible visit notes
+      responses:
+        "200":
+          description: Visit notes
+    post:
+      tags: [Visits]
+      summary: Create visit notes
+      responses:
+        "201":
+          description: Visit note created
+  /api/visit-notes/{note_id}/:
+    get:
+      tags: [Visits]
+      summary: Get visit note
+      parameters:
+        - $ref: "#/components/parameters/note_id"
+      responses:
+        "200":
+          description: Visit note
+    patch:
+      tags: [Visits]
+      summary: Update visit note
+      parameters:
+        - $ref: "#/components/parameters/note_id"
+      responses:
+        "200":
+          description: Visit note updated
+  /api/ratings/:
+    get:
+      tags: [Ratings]
+      summary: List visible ratings
+      responses:
+        "200":
+          description: Ratings
+    post:
+      tags: [Ratings]
+      summary: Rate completed care request
+      responses:
+        "201":
+          description: Rating created
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    contact_id:
+      in: path
+      name: contact_id
+      required: true
+      schema:
+        type: integer
+    credential_id:
+      in: path
+      name: credential_id
+      required: true
+      schema:
+        type: integer
+    dependent_id:
+      in: path
+      name: dependent_id
+      required: true
+      schema:
+        type: integer
+    nurse_id:
+      in: path
+      name: nurse_id
+      required: true
+      schema:
+        type: integer
+    note_id:
+      in: path
+      name: note_id
+      required: true
+      schema:
+        type: integer
+    patient_id:
+      in: path
+      name: patient_id
+      required: true
+      schema:
+        type: integer
+    request_id:
+      in: path
+      name: request_id
+      required: true
+      schema:
+        type: integer
+    slot_id:
+      in: path
+      name: slot_id
+      required: true
+      schema:
+        type: integer
+  responses:
+    Unauthorized:
+      description: Missing or invalid JWT.
+    Forbidden:
+      description: Authenticated actor is not permitted to access this resource.
+    ValidationError:
+      description: Request validation failed.
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, first_name, last_name, phone_number, role]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone_number:
+          type: string
+          example: "+254712345678"
+        role:
+          type: string
+          enum: [PATIENT, NURSE]
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    RefreshRequest:
+      type: object
+      required: [refresh]
+      properties:
+        refresh:
+          type: string
+    OTPVerifyRequest:
+      type: object
+      required: [purpose, code]
+      properties:
+        purpose:
+          type: string
+          enum: [EMAIL, PHONE]
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+    OTPResendRequest:
+      type: object
+      required: [purpose]
+      properties:
+        purpose:
+          type: string
+          enum: [EMAIL, PHONE]
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          type: string
+          enum: [PATIENT, NURSE, ADMIN]
+        email_verified:
+          type: boolean
+        phone_verified:
+          type: boolean
+    UserEnvelope:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+    LoginResponse:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+    RefreshResponse:
+      type: object
+      properties:
+        access:
+          type: string
+        refresh:
+          type: string
+    LocationUpdate:
+      type: object
+      required: [latitude, longitude]
+      properties:
+        latitude:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitude:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+    PatientProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        phone_number:
+          type: string
+        blood_group:
+          type: string
+        allergies:
+          type: string
+        chronic_conditions:
+          type: string
+        current_medications:
+          type: string
+        medical_notes:
+          type: string
+    PatientProfilePatch:
+      type: object
+      properties:
+        national_id:
+          type: string
+        gender:
+          type: string
+        date_of_birth:
+          type: string
+          format: date
+        blood_group:
+          type: string
+        allergies:
+          type: string
+        chronic_conditions:
+          type: string
+        current_medications:
+          type: string
+        disabilities:
+          type: string
+        medical_notes:
+          type: string
+        county:
+          type: string
+        address:
+          type: string

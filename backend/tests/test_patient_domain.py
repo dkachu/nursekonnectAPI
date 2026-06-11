@@ -175,7 +175,9 @@ def test_patient_can_manage_emergency_contacts(
     assert len(list_response.data) == 1
     assert update_response.data["relationship"] == "Parent"
     assert delete_response.status_code == 204
-    assert EmergencyContact.objects.count() == 0
+    assert EmergencyContact.objects.count() == 1
+    assert EmergencyContact.objects.get(id=contact_id).is_deleted is True
+    assert api_client.get(reverse("patient-emergency-contact-list")).data == []
 
 
 @pytest.mark.django_db
@@ -209,7 +211,9 @@ def test_patient_can_manage_dependents(api_client: APIClient, patient_user: obje
     assert list_response.data[0]["medical_notes"] == "Mild eczema"
     assert update_response.data["medical_notes"] == "No current issues"
     assert delete_response.status_code == 204
-    assert PatientDependent.objects.count() == 0
+    assert PatientDependent.objects.count() == 1
+    assert PatientDependent.objects.get(id=dependent_id).is_deleted is True
+    assert api_client.get(reverse("patient-dependent-list")).data == []
 
 
 @pytest.mark.django_db

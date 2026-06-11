@@ -11,8 +11,11 @@ from apps.accounts.models import UserRole
 from apps.audit_logs.services.audit import AuditLogService
 from apps.nurses.models import NurseProfile, NurseStatus, NurseVerificationStatus
 from apps.patients.models import PatientDependent, PatientProfile
+from apps.requests.matching import MatchingService
 from apps.requests.models import CareRequest, CareRequestStatus
 from apps.requests.selectors import CareRequestSelector
+from apps.requests.tasks import CareRequestWorkflowScheduler
+from apps.tracking.services.journey import JourneyProximityService
 from apps.tracking.services.location_updates import LocationFreshnessService
 
 TERMINAL_STATUSES = {
@@ -30,9 +33,15 @@ class CareRequestService:
         *,
         audit_service: AuditLogService | None = None,
         selector: CareRequestSelector | None = None,
+        matching_service: MatchingService | None = None,
+        proximity_service: JourneyProximityService | None = None,
+        workflow_scheduler: CareRequestWorkflowScheduler | None = None,
     ) -> None:
         self.audit_service = audit_service or AuditLogService()
         self.selector = selector or CareRequestSelector()
+        self.matching_service = matching_service or MatchingService()
+        self.proximity_service = proximity_service or JourneyProximityService()
+        self.workflow_scheduler = workflow_scheduler or CareRequestWorkflowScheduler()
 
     @transaction.atomic
     def create(
@@ -74,6 +83,7 @@ class CareRequestService:
             request=request,
             ip_address=ip_address,
         )
+        self.matching_service.match_and_notify(care_request=request)
         return request
 
     @transaction.atomic
@@ -90,6 +100,7 @@ class CareRequestService:
         request = self.selector.get_for_update(request_id=request_id)
         if request.status != CareRequestStatus.PENDING or request.assigned_nurse_id is not None:
             raise ValueError("Care request is no longer available for acceptance.")
+        self._ensure_nurse_was_offered(request=request, nurse=nurse)
 
         now = timezone.now()
         request.assigned_nurse = nurse
@@ -99,6 +110,7 @@ class CareRequestService:
 
         nurse.status = NurseStatus.BUSY
         nurse.save(update_fields=["status", "updated_at"])
+        self._mark_offer_accepted(request=request, nurse=nurse)
         self._audit(
             actor=actor,
             action="CARE_REQUEST_ACCEPTED",
@@ -106,6 +118,7 @@ class CareRequestService:
             ip_address=ip_address,
             metadata={"nurse_id": nurse.id},
         )
+        self.workflow_scheduler.schedule_after_acceptance(care_request_id=request.id)
         return request
 
     @transaction.atomic
@@ -117,9 +130,12 @@ class CareRequestService:
         ip_address: str | None,
     ) -> CareRequest:
         """Move an accepted request into en-route status."""
-        return self._assigned_nurse_transition(
+        request = self.selector.get_for_update(request_id=request_id)
+        self._ensure_assigned_nurse(actor=actor, request=request)
+        self.proximity_service.ensure_fresh_nurse_location(nurse=request.assigned_nurse)
+        return self._apply_assigned_nurse_transition(
+            request=request,
             actor=actor,
-            request_id=request_id,
             allowed_statuses={CareRequestStatus.ACCEPTED, CareRequestStatus.PREPARING},
             next_status=CareRequestStatus.NURSE_EN_ROUTE,
             timestamp_field="journey_started_at",
@@ -136,9 +152,12 @@ class CareRequestService:
         ip_address: str | None,
     ) -> CareRequest:
         """Mark an en-route nurse as arrived."""
-        return self._assigned_nurse_transition(
+        request = self.selector.get_for_update(request_id=request_id)
+        self._ensure_assigned_nurse(actor=actor, request=request)
+        self.proximity_service.ensure_within_arrival_distance(care_request=request)
+        return self._apply_assigned_nurse_transition(
+            request=request,
             actor=actor,
-            request_id=request_id,
             allowed_statuses={CareRequestStatus.NURSE_EN_ROUTE},
             next_status=CareRequestStatus.ARRIVED,
             timestamp_field="arrived_at",
@@ -155,9 +174,12 @@ class CareRequestService:
         ip_address: str | None,
     ) -> CareRequest:
         """Start the visit after nurse arrival."""
-        return self._assigned_nurse_transition(
+        request = self.selector.get_for_update(request_id=request_id)
+        self._ensure_assigned_nurse(actor=actor, request=request)
+        self.proximity_service.ensure_within_arrival_distance(care_request=request)
+        return self._apply_assigned_nurse_transition(
+            request=request,
             actor=actor,
-            request_id=request_id,
             allowed_statuses={CareRequestStatus.ARRIVED},
             next_status=CareRequestStatus.IN_PROGRESS,
             timestamp_field="visit_started_at",
@@ -229,6 +251,28 @@ class CareRequestService:
         """Apply an assigned-nurse-only transition to a locked request row."""
         request = self.selector.get_for_update(request_id=request_id)
         self._ensure_assigned_nurse(actor=actor, request=request)
+        return self._apply_assigned_nurse_transition(
+            request=request,
+            actor=actor,
+            allowed_statuses=allowed_statuses,
+            next_status=next_status,
+            timestamp_field=timestamp_field,
+            action=action,
+            ip_address=ip_address,
+        )
+
+    def _apply_assigned_nurse_transition(
+        self,
+        *,
+        request: CareRequest,
+        actor: object,
+        allowed_statuses: set[str],
+        next_status: str,
+        timestamp_field: str,
+        action: str,
+        ip_address: str | None,
+    ) -> CareRequest:
+        """Apply a validated transition to an assigned request."""
         if request.status not in allowed_statuses:
             raise ValueError(f"Cannot transition care request from {request.status}.")
 
@@ -267,6 +311,30 @@ class CareRequestService:
             raise ValueError("NCK verification is required before accepting requests.")
         if not nurse.is_available or nurse.status != NurseStatus.ONLINE:
             raise ValueError("Nurse must be online and available to accept requests.")
+
+    def _ensure_nurse_was_offered(self, *, request: CareRequest, nurse: NurseProfile) -> None:
+        """Require an offer when the request has been distributed through matching."""
+        from apps.requests.models import RequestOffer, RequestOfferStatus
+
+        offers = RequestOffer.objects.filter(care_request=request)
+        if not offers.exists():
+            return
+        if not offers.filter(nurse=nurse, status=RequestOfferStatus.OFFERED).exists():
+            raise PermissionError("Only nurses with active offers can accept this request.")
+
+    def _mark_offer_accepted(self, *, request: CareRequest, nurse: NurseProfile) -> None:
+        """Mark accepted offer and cancel competing active offers."""
+        from apps.requests.models import RequestOffer, RequestOfferStatus
+
+        RequestOffer.objects.filter(
+            care_request=request,
+            nurse=nurse,
+            status=RequestOfferStatus.OFFERED,
+        ).update(status=RequestOfferStatus.ACCEPTED)
+        RequestOffer.objects.filter(
+            care_request=request,
+            status=RequestOfferStatus.OFFERED,
+        ).exclude(nurse=nurse).update(status=RequestOfferStatus.CANCELLED)
 
     def _ensure_assigned_nurse(self, *, actor: object, request: CareRequest) -> None:
         """Ensure the actor is the nurse assigned to the request."""

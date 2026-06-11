@@ -40,4 +40,6 @@ Returns the care request with `status = ACCEPTED` and the assigned nurse fields.
 - Uses `transaction.atomic()` and `select_for_update()` to prevent double assignment.
 - Only one nurse may own a request.
 - Nurse must be email verified, phone verified, NCK verified, online, and available.
+- Acceptance schedules a 30 minute journey warning workflow.
+- Acceptance schedules a 60 minute stalled-assignment cancellation workflow.
 - Acceptance writes an audit log.
