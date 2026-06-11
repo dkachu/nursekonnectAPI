@@ -1,0 +1,7 @@
+dist/
+node_modules/
+coverage/
+AGENTS.md
+lighthouse-report.json
+vite-dev*.log
+vite-preview*.log
