@@ -63,11 +63,10 @@ def clear_refresh_cookie(response: Response) -> None:
 
 def refresh_token_from_request(request: Request) -> str | None:
     """Read refresh token from secure cookie, with body fallback for API clients."""
-    cookie_token = request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
-    if cookie_token:
-        return cookie_token
     body_token = request.data.get("refresh") if isinstance(request.data, dict) else None
-    return str(body_token) if body_token else None
+    if body_token:
+        return str(body_token)
+    return request.COOKIES.get(settings.AUTH_REFRESH_COOKIE_NAME)
 
 
 class RegisterView(APIView):

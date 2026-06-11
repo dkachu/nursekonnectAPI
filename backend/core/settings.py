@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import sys
+import json
+import logging
 from datetime import timedelta
 from pathlib import Path
 
@@ -38,6 +40,30 @@ def env_int(name: str, default: int) -> int:
     return int(value)
 
 
+def env_log_level(name: str, default: str = "INFO") -> str:
+    """Read and normalize a logging level."""
+    value = env(name, default) or default
+    return value.strip().upper()
+
+
+class JsonLogFormatter(logging.Formatter):
+    """Emit container-friendly structured logs without an external dependency."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": self.formatTime(record, self.datefmt),
+            "level": record.levelname,
+            "logger": record.name,
+            "module": record.module,
+            "process": record.process,
+            "thread": record.thread,
+            "message": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+        return json.dumps(payload, separators=(",", ":"))
+
+
 def env_list(name: str, default: str = "") -> list[str]:
     """Read a comma-separated environment variable."""
     value = env(name, default)
@@ -47,7 +73,7 @@ def env_list(name: str, default: str = "") -> list[str]:
 
 
 RUNNING_TESTS = any("pytest" in argument or argument == "test" for argument in sys.argv)
-DJANGO_ENV = env("DJANGO_ENV", "test" if RUNNING_TESTS else "local")
+DJANGO_ENV = "test" if RUNNING_TESTS else env("DJANGO_ENV", "local")
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", "unsafe-local-development-key")
 MEDICAL_DATA_FERNET_KEY = env("MEDICAL_DATA_FERNET_KEY")
@@ -109,6 +135,48 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "core.wsgi.application"
 ASGI_APPLICATION = "core.asgi.application"
+
+LOG_LEVEL = env_log_level("DJANGO_LOG_LEVEL", "INFO")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {
+            "()": JsonLogFormatter,
+        },
+        "plain": {
+            "format": "%(levelname)s %(asctime)s %(name)s %(message)s",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": env("DJANGO_LOG_FORMAT", "json"),
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": env_log_level("DJANGO_REQUEST_LOG_LEVEL", "WARNING"),
+            "propagate": False,
+        },
+        "apps": {
+            "handlers": ["console"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+    },
+}
 
 if DJANGO_ENV == "test":
     DATABASES = {
@@ -247,6 +315,9 @@ CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = env("SESSION_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_SAMESITE = env("CSRF_COOKIE_SAMESITE", "Lax")
+USE_X_FORWARDED_HOST = env_bool("DJANGO_USE_X_FORWARDED_HOST", DJANGO_ENV == "production")
 
 if DJANGO_ENV == "local":
     CORS_ALLOWED_ORIGINS = [
@@ -288,6 +359,10 @@ if DJANGO_ENV == "production":
         raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set in production.")
     if MEDICAL_DATA_FERNET_KEY is None:
         raise ImproperlyConfigured("MEDICAL_DATA_FERNET_KEY must be set in production.")
+    if not ALLOWED_HOSTS:
+        raise ImproperlyConfigured("DJANGO_ALLOWED_HOSTS must be set in production.")
+    if any(origin == "*" for origin in CORS_ALLOWED_ORIGINS):
+        raise ImproperlyConfigured("Wildcard CORS origins are not allowed in production.")
     DEBUG = False
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
     SECURE_HSTS_SECONDS = 31536000

@@ -10,13 +10,16 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.requests.selectors import CareRequestSelector
+from apps.tracking.selectors import TrackingLocationSelector
 from apps.tracking.serializers import (
     LocationUpdateResponseSerializer,
     LocationUpdateSerializer,
     TrackingLocationSerializer,
 )
-from apps.tracking.selectors import TrackingLocationSelector
-from apps.tracking.services.location_updates import LocationUpdateInput, LocationUpdateService
+from apps.tracking.services.location_updates import (
+    LocationUpdateInput,
+    LocationUpdateService,
+)
 
 
 def service_error_response(error: ValueError | PermissionError | ObjectDoesNotExist) -> Response:
